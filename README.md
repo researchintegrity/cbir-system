@@ -98,7 +98,7 @@ Configuration is managed in `config/config.yaml`.
 - **Model**: Change `device` to `"cuda"` to enable GPU acceleration.
 - **Milvus**: Configure host, port, and index parameters (IVF_FLAT, HNSW, etc.).
 
-## 🛠 Development
+## Development
 
 - **Source Code**: Located in `src/`.
 - **Hot Reload**: The `docker-compose.yml` mounts the `src/` directory, so changes to the code are reflected immediately (restart container to apply).
