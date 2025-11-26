@@ -1,0 +1,24 @@
+app:
+  host: "0.0.0.0"
+  port: 8001
+  workers: 1
+
+model:
+  name: "sscd_disc_mixup"
+  type: "sscd" # sscd, clip, dino, etc.
+  path: "models/sscd_disc_mixup.torchscript.pt"
+  download_url: "https://dl.fbaipublicfiles.com/sscd-copy-detection/sscd_disc_mixup.torchscript.pt"
+  device: "cpu" # "cuda" or "cpu"
+  embedding_dim: 512
+  input_size: 224 # SSCD typically uses 224 or 288 depending on training, standard is 224 for ResNet50 based
+
+milvus:
+  host: "milvus-standalone"
+  port: 19530
+  collection_name: "image_embeddings"
+  metric_type: "IP" # Inner Product (for normalized embeddings = Cosine Similarity) or L2
+  index_type: "IVF_FLAT" # Good balance for < 1M vectors
+  nlist: 1024 # Parameter for IVF index
+
+storage:
+  base_path: "/workspace/data" # Shared volume path
