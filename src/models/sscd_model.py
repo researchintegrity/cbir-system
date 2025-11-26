@@ -52,8 +52,8 @@ class SSCDEncoder(ImageEncoder):
         except Exception as e:
             print(f"Failed to load model: {e}")
             raise e
-
-    def encode(self, image: Union[Image.Image, List[Image.Image]]) -> np.ndarray:
+    
+    def encode(self, image: Union[Image.Image, List[Image.Image]], batch_size: int = 32) -> np.ndarray:
         if self.model is None:
             self.load_model()
 
@@ -62,21 +62,32 @@ class SSCDEncoder(ImageEncoder):
         else:
             images = image
 
-        # Preprocess
-        batch_tensors = []
-        for img in images:
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            batch_tensors.append(self.transform(img))
-        
-        batch = torch.stack(batch_tensors).to(self.device)
+        if not images:
+            return np.array([])
 
-        with torch.no_grad():
-            # Forward pass
-            embeddings = self.model(batch)
+        all_embeddings = []
+
+        # Process in batches
+        for i in range(0, len(images), batch_size):
+            batch_imgs = images[i : i + batch_size]
             
-            # SSCD embeddings are usually already normalized in the model, 
-            # but it's good practice to ensure L2 normalization for Cosine Similarity
-            embeddings = F.normalize(embeddings, p=2, dim=1)
+            # Preprocess
+            batch_tensors = []
+            for img in batch_imgs:
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                batch_tensors.append(self.transform(img))
             
-        return embeddings.cpu().numpy()
+            batch = torch.stack(batch_tensors).to(self.device)
+
+            with torch.no_grad():
+                # Forward pass
+                embeddings = self.model(batch)
+                
+                # SSCD embeddings are usually already normalized in the model, 
+                # but it's good practice to ensure L2 normalization for Cosine Similarity
+                embeddings = F.normalize(embeddings, p=2, dim=1)
+                all_embeddings.append(embeddings.cpu().numpy())
+            
+        return np.concatenate(all_embeddings, axis=0)
+

@@ -32,6 +32,9 @@ A standalone microservice for image similarity search and deduplication, powered
 3. **Verify**:
    Visit `http://localhost:8001/docs` to see the API documentation.
 
+4. **Visualization**:
+   Access the **Attu** interface at `http://localhost:3322` to visualize and manage the Milvus database.
+
 ---
 
 ## API Usage
@@ -88,7 +91,7 @@ This system is designed for multi-user environments (like ELIS).
 - **Indexing**: You must provide a `user_id` when indexing.
 - **Searching**: Searches are **mandatory filtered** by `user_id`. A user can only find matches within their own uploaded images. Cross-user search is disabled by design to ensure privacy.
 
-## ⚙️ Configuration
+## Configuration
 
 Configuration is managed in `config/config.yaml`.
 
