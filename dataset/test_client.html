@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CBIR System Tester</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex: 1;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #results {
+            margin-top: 20px;
+        }
+        .result-item {
+            border: 1px solid #eee;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .score {
+            font-weight: bold;
+            color: #28a745;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>CBIR System Tester</h1>
+    
+    <div class="form-group">
+        <label for="userId">User ID (for isolation testing):</label>
+        <input type="text" id="userId" value="test_user_1">
+    </div>
+
+    <div class="container">
+        <!-- Indexing Panel -->
+        <div class="panel">
+            <h2>1. Index Image</h2>
+            <p>Upload an image to add it to the vector database.</p>
+            <div class="form-group">
+                <label for="indexFile">Select Image:</label>
+                <input type="file" id="indexFile" accept="image/*">
+            </div>
+            <!-- Note: In a real scenario, the file would be on the server. 
+                 Here we'll simulate the flow by uploading to a temp endpoint if available, 
+                 or just assuming the backend can handle the upload directly.
+                 Since our API expects a path for /index, but we want to test from browser,
+                 we might need a helper endpoint or just use the search/upload for testing.
+                 
+                 Wait, the current API has /index expecting a path (server-side).
+                 But /search/upload accepts a file.
+                 
+                 To make this tester work without changing the backend to accept file uploads for indexing,
+                 we strictly can't "index" a file from the browser unless the backend supports it.
+                 
+                 However, for testing purposes, let's assume the user wants to test the SEARCH functionality primarily.
+                 
+                 Actually, let's add a small hack: We will use the /search/upload endpoint to test the model,
+                 but to test indexing, we really need a way to upload the file first.
+                 
+                 Since I cannot easily change the backend right now to add an upload-and-index endpoint 
+                 (though I could), I will assume for this HTML tester that we are testing the 
+                 /search/upload endpoint which IS implemented.
+            -->
+            <p><em>Note: The current API requires images to be on the server disk for indexing. This tester primarily tests the <strong>Search by Upload</strong> functionality.</em></p>
+        </div>
+
+        <!-- Search Panel -->
+        <div class="panel">
+            <h2>2. Search Similar</h2>
+            <p>Upload an image to find similar ones in the database.</p>
+            <div class="form-group">
+                <label for="searchFile">Query Image(s):</label>
+                <input type="file" id="searchFile" accept="image/*" multiple>
+            </div>
+            <div class="form-group">
+                <label for="topK">Top K Results:</label>
+                <input type="number" id="topK" value="5" min="1" max="20">
+            </div>
+            <button onclick="searchImage()">Search</button>
+            <div id="searchStatus" class="status"></div>
+        </div>
+    </div>
+
+    <div class="panel" style="margin-top: 20px;">
+        <h2>Results</h2>
+        <div id="results"></div>
+        <h3>Raw Response</h3>
+        <pre id="rawResponse"></pre>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8001';
+
+        async function searchImage() {
+            const fileInput = document.getElementById('searchFile');
+            const userId = document.getElementById('userId').value;
+            const topK = document.getElementById('topK').value;
+            const statusDiv = document.getElementById('searchStatus');
+            const resultsDiv = document.getElementById('results');
+            const rawResponsePre = document.getElementById('rawResponse');
+
+            if (fileInput.files.length === 0) {
+                alert('Please select at least one file');
+                return;
+            }
+
+            if (!userId) {
+                alert('Please enter a User ID');
+                return;
+            }
+
+            statusDiv.className = 'status';
+            statusDiv.textContent = 'Searching...';
+            statusDiv.style.display = 'block';
+            resultsDiv.innerHTML = '';
+            rawResponsePre.textContent = '';
+
+            const allResults = [];
+
+            try {
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    const file = fileInput.files[i];
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    // Query params
+                    const url = `${API_URL}/search/upload?user_id=${encodeURIComponent(userId)}&top_k=${topK}`;
+
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        allResults.push({
+                            filename: file.name,
+                            data: data
+                        });
+                    } else {
+                        allResults.push({
+                            filename: file.name,
+                            error: data.detail || 'Search failed'
+                        });
+                    }
+                }
+
+                rawResponsePre.textContent = JSON.stringify(allResults, null, 2);
+                statusDiv.className = 'status success';
+                statusDiv.textContent = `Processed ${fileInput.files.length} images.`;
+
+                allResults.forEach(item => {
+                    const fileHeader = document.createElement('h3');
+                    fileHeader.textContent = `Results for: ${item.filename}`;
+                    resultsDiv.appendChild(fileHeader);
+
+                    if (item.error) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'result-item';
+                        errorDiv.style.color = 'red';
+                        errorDiv.textContent = `Error: ${item.error}`;
+                        resultsDiv.appendChild(errorDiv);
+                    } else if (item.data.results && item.data.results.length > 0) {
+                        item.data.results.forEach(result => {
+                            // Convert container path to relative path for display
+                            // Assuming the client is running in the same directory as the 'rank_images' folder
+                            // and the server returns paths starting with /app/rank_images/
+                            let displayPath = result.image_path;
+                            if (displayPath.startsWith('/app/')) {
+                                displayPath = displayPath.replace('/app/', '');
+                            }
+
+                            const div = document.createElement('div');
+                            div.className = 'result-item';
+                            div.innerHTML = `
+                                <img src="${displayPath}" alt="Result Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 4px;">
+                                <div>
+                                    <div class="score">Score: ${result.distance.toFixed(4)}</div>
+                                    <div>Path: ${result.image_path}</div>
+                                    <div>User: ${result.user_id}</div>
+                                    <small>ID: ${result.id}</small>
+                                </div>
+                            `;
+                            resultsDiv.appendChild(div);
+                        });
+                    } else {
+                        const noResDiv = document.createElement('div');
+                        noResDiv.className = 'result-item';
+                        noResDiv.textContent = 'No similar images found.';
+                        resultsDiv.appendChild(noResDiv);
+                    }
+                });
+
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = `Error: ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
