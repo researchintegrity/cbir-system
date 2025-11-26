@@ -54,6 +54,22 @@ python dataset/test_client.py /path/to/query/image.jpg
 - `image_path`: Path to the query image (must be accessible by the server container if using path-based search, or local path if using upload).
 - `--top-k`: Number of results to return (default: 5).
 
+### `clean_user_data.py`
+
+A script to delete all indexed images for a specific user from the Milvus database.
+
+**Usage:**
+
+```bash
+python dataset/clean_user_data.py --user-id <USER_ID>
+```
+
+**Arguments:**
+
+- `--user-id`: The ID of the user whose data should be deleted (required).
+- `--milvus-host`: Hostname of the Milvus server (default: `localhost`).
+- `--milvus-port`: Port of the Milvus server (default: `19530`).
+
 ## Notes
 
 - Ensure the `rank_images/` directory is populated before running the indexing scripts.
