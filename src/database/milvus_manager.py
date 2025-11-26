@@ -143,3 +143,10 @@ class MilvusManager:
         expr = f"user_id == '{user_id}' && image_path == '{image_path}'"
         self.collection.delete(expr)
         self.collection.flush()
+
+    def delete_by_user(self, user_id: str):
+        """Delete all vectors for a specific user."""
+        expr = f"user_id == '{user_id}'"
+        self.collection.delete(expr)
+        self.collection.flush()
+        print(f"Deleted all data for user: {user_id}")
