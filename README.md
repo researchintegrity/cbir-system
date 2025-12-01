@@ -50,9 +50,12 @@ Add an image to the database. The `image_path` must be accessible to the contain
 ```json
 {
   "user_id": "user_123",
-  "image_path": "/workspace/data/image1.jpg"
+  "image_path": "/workspace/data/image1.jpg",
+  "labels": ["Western Blot", "Microscopy"]
 }
 ```
+
+The `labels` field is optional and allows you to tag images with class labels for filtered retrieval.
 
 ### Search for Similar Images
 
@@ -64,8 +67,30 @@ Find images similar to a query image. **Results are strictly isolated by `user_i
 {
   "user_id": "user_123",
   "image_path": "/workspace/data/query.jpg",
-  "top_k": 10
+  "top_k": 10,
+  "labels": ["Western Blot"]
 }
+```
+
+The `labels` field is optional. When provided, only images with **any** of the specified labels will be returned (OR logic). When omitted, all images are considered.
+
+### Search by File Upload
+
+Upload an image directly to search for similar images.
+
+**POST** `/search/upload`
+
+Query parameters:
+
+- `user_id` (required): User ID for isolation
+- `top_k` (optional): Number of results (default: 10)
+- `labels` (optional): Filter by labels (can be repeated for multiple labels)
+
+Example:
+
+```bash
+curl -X POST "http://localhost:8001/search/upload?user_id=user_123&top_k=5&labels=Western%20Blot&labels=Microscopy" \
+  -F "file=@query_image.jpg"
 ```
 
 ### Delete an Image
@@ -78,6 +103,40 @@ Remove an image vector from the index.
 {
   "user_id": "user_123",
   "image_path": "/workspace/data/image1.jpg"
+}
+```
+
+---
+
+## Image Class Labels
+
+Scientific images can have different classes such as Western Blots, Fluorescent Microscopy, X-Ray, Graphs, etc. The CBIR system supports **label-based filtering** to retrieve only images of desired classes.
+
+### How it works
+
+- **Indexing**: When adding an image, you can optionally provide a list of labels.
+- **Searching**: When querying, you can filter results to only include images with specific labels.
+- **OR Logic**: If multiple labels are specified, images matching **any** of the labels are returned.
+- **No Filter**: If no labels are provided during search, all images are considered.
+
+### Example: Indexing with Labels
+
+```bash
+python dataset/add_images_to_index.py --images-dir ./images --labels "Western Blot" "Microscopy"
+```
+
+Or using a JSON mapping file:
+
+```bash
+python dataset/add_images_to_index.py --images-dir ./images --labels-file labels.json
+```
+
+Where `labels.json` maps image paths to their labels:
+
+```json
+{
+  "image1.jpg": ["Western Blot"],
+  "image2.png": ["Microscopy", "Fluorescent"]
 }
 ```
 
