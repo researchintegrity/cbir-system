@@ -146,6 +146,10 @@
                 <label for="topK">Top K Results:</label>
                 <input type="number" id="topK" value="5" min="1" max="20">
             </div>
+            <div class="form-group">
+                <label for="labels">Filter by Labels (comma-separated, leave empty for all):</label>
+                <input type="text" id="labels" placeholder="e.g., Western Blot, Microscopy">
+            </div>
             <button onclick="searchImage()">Search</button>
             <div id="searchStatus" class="status"></div>
         </div>
@@ -165,6 +169,7 @@
             const fileInput = document.getElementById('searchFile');
             const userId = document.getElementById('userId').value;
             const topK = document.getElementById('topK').value;
+            const labelsInput = document.getElementById('labels').value;
             const statusDiv = document.getElementById('searchStatus');
             const resultsDiv = document.getElementById('results');
             const rawResponsePre = document.getElementById('rawResponse');
@@ -178,6 +183,11 @@
                 alert('Please enter a User ID');
                 return;
             }
+
+            // Parse labels (comma-separated)
+            const labels = labelsInput.trim() 
+                ? labelsInput.split(',').map(l => l.trim()).filter(l => l.length > 0)
+                : [];
 
             statusDiv.className = 'status';
             statusDiv.textContent = 'Searching...';
@@ -194,7 +204,14 @@
                     formData.append('file', file);
                     
                     // Query params
-                    const url = `${API_URL}/search/upload?user_id=${encodeURIComponent(userId)}&top_k=${topK}`;
+                    let url = `${API_URL}/search/upload?user_id=${encodeURIComponent(userId)}&top_k=${topK}`;
+                    
+                    // Add labels if provided (as multiple query params)
+                    if (labels.length > 0) {
+                        labels.forEach(label => {
+                            url += `&labels=${encodeURIComponent(label)}`;
+                        });
+                    }
 
                     const response = await fetch(url, {
                         method: 'POST',
@@ -243,11 +260,15 @@
 
                             const div = document.createElement('div');
                             div.className = 'result-item';
+                            const labelsHtml = result.labels && result.labels.length > 0 
+                                ? `<div>Labels: <strong>${result.labels.join(', ')}</strong></div>`
+                                : '<div>Labels: <em>None</em></div>';
                             div.innerHTML = `
                                 <img src="${displayPath}" alt="Result Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 4px;">
                                 <div>
                                     <div class="score">Score: ${result.distance.toFixed(4)}</div>
                                     <div>Path: ${result.image_path}</div>
+                                    ${labelsHtml}
                                     <div>User: ${result.user_id}</div>
                                     <small>ID: ${result.id}</small>
                                 </div>
