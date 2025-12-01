@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional, List
 import uvicorn
 import os
 import sys
@@ -77,7 +78,8 @@ async def index_image(request: IndexRequest):
         ids = milvus_manager.insert_vectors(
             user_id=request.user_id,
             image_paths=[request.image_path],
-            embeddings=[embedding_list]
+            embeddings=[embedding_list],
+            labels=[request.labels or []]
         )
         
         return {"status": "success", "id": ids[0]}
@@ -109,7 +111,8 @@ async def search_image(request: SearchRequest):
         results = milvus_manager.search_vectors(
             query_embedding=embedding_list,
             top_k=request.top_k,
-            user_id=request.user_id
+            user_id=request.user_id,
+            labels=request.labels
         )
         
         return SearchResponse(results=results)
@@ -118,12 +121,15 @@ async def search_image(request: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/search/upload")
-async def search_image_upload(user_id: str, file: UploadFile = File(...), top_k: int = 10):
+async def search_image_upload(user_id: str, file: UploadFile = File(...), top_k: int = 10, labels: Optional[List[str]] = Query(default=None)):
     """
     Search for similar images by uploading a file directly.
     """
     if not encoder or not milvus_manager:
         raise HTTPException(status_code=503, detail="Service not fully initialized")
+
+    # Debug: Log incoming parameters
+    print(f"[DEBUG] Search request - user_id: {user_id}, top_k: {top_k}, labels: {labels}")
 
     try:
         # Read uploaded file
@@ -138,7 +144,8 @@ async def search_image_upload(user_id: str, file: UploadFile = File(...), top_k:
         results = milvus_manager.search_vectors(
             query_embedding=embedding_list,
             top_k=top_k,
-            user_id=user_id
+            user_id=user_id,
+            labels=labels
         )
         
         return SearchResponse(results=results)

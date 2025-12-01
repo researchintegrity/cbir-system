@@ -51,6 +51,7 @@ class MilvusManager:
                 FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
                 FieldSchema(name="user_id", dtype=DataType.VARCHAR, max_length=64), # For multi-tenancy
                 FieldSchema(name="image_path", dtype=DataType.VARCHAR, max_length=512),
+                FieldSchema(name="labels", dtype=DataType.ARRAY, element_type=DataType.VARCHAR, max_capacity=50, max_length=128), # Image class labels
                 FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=self.dim)
             ]
             
@@ -67,7 +68,7 @@ class MilvusManager:
             self.collection.load()
             print(f"Collection {self.collection_name} created and loaded.")
 
-    def insert_vectors(self, user_id: str, image_paths: List[str], embeddings: List[List[float]]) -> List[int]:
+    def insert_vectors(self, user_id: str, image_paths: List[str], embeddings: List[List[float]], labels: Optional[List[List[str]]] = None) -> List[int]:
         """
         Insert vectors into the collection.
         
@@ -75,18 +76,24 @@ class MilvusManager:
             user_id: The owner of the images.
             image_paths: List of file paths.
             embeddings: List of embedding vectors.
+            labels: Optional list of label lists for each image (e.g., [['Western Blot'], ['Microscopy', 'Fluorescent']]).
             
         Returns:
             List of inserted IDs.
         """
         # Prepare data for insertion
-        # Milvus expects columns: [user_id_list, image_path_list, embedding_list]
+        # Milvus expects columns: [user_id_list, image_path_list, labels_list, embedding_list]
         # Note: id is auto-generated
         
         user_ids = [user_id] * len(image_paths)
+        # If labels not provided, use empty list for each image
+        if labels is None:
+            labels = [[] for _ in range(len(image_paths))]
+        
         data = [
             user_ids,
             image_paths,
+            labels,
             embeddings
         ]
         
@@ -94,7 +101,7 @@ class MilvusManager:
         self.collection.flush() # Ensure data is visible
         return res.primary_keys
 
-    def search_vectors(self, query_embedding: List[float], top_k: int = 10, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def search_vectors(self, query_embedding: List[float], top_k: int = 10, user_id: Optional[str] = None, labels: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
         Search for similar vectors.
         
@@ -102,9 +109,10 @@ class MilvusManager:
             query_embedding: The query vector.
             top_k: Number of results to return.
             user_id: If provided, filter results to only this user.
+            labels: If provided, filter results to images that have ANY of these labels.
             
         Returns:
-            List of results (id, distance, image_path, user_id).
+            List of results (id, distance, image_path, user_id, labels).
         """
         search_params = {
             "metric_type": settings.milvus.metric_type,
@@ -112,9 +120,20 @@ class MilvusManager:
         }
         
         # Construct expression for filtering
-        expr = None
+        expr_parts = []
         if user_id:
-            expr = f"user_id == '{user_id}'"
+            expr_parts.append(f"user_id == '{user_id}'")
+        
+        # Filter by labels using array_contains_any for OR logic
+        if labels and len(labels) > 0:
+            # Build expression: array_contains_any(labels, ["label1", "label2"])
+            labels_str = ', '.join([f'"{label}"' for label in labels])
+            expr_parts.append(f"array_contains_any(labels, [{labels_str}])")
+        
+        expr = ' && '.join(expr_parts) if expr_parts else None
+        
+        # Debug: Log the expression
+        print(f"[DEBUG] Search expression: {expr}")
             
         results = self.collection.search(
             data=[query_embedding],
@@ -122,18 +141,22 @@ class MilvusManager:
             param=search_params,
             limit=top_k,
             expr=expr,
-            output_fields=["user_id", "image_path"]
+            output_fields=["user_id", "image_path", "labels"]
         )
         
         # Parse results
         parsed_results = []
         for hits in results:
             for hit in hits:
+                # Access entity fields using dictionary-style access
+                entity = hit.entity
+                entity_labels = entity.labels if hasattr(entity, 'labels') else []
                 parsed_results.append({
                     "id": hit.id,
                     "distance": hit.distance,
-                    "user_id": hit.entity.get("user_id"),
-                    "image_path": hit.entity.get("image_path")
+                    "user_id": entity.user_id if hasattr(entity, 'user_id') else None,
+                    "image_path": entity.image_path if hasattr(entity, 'image_path') else None,
+                    "labels": entity_labels if entity_labels is not None else []
                 })
                 
         return parsed_results
