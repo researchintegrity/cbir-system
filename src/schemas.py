@@ -6,6 +6,14 @@ class IndexRequest(BaseModel):
     image_path: str # Absolute path to the image file
     labels: Optional[List[str]] = None # Image class labels (e.g., ['Western Blot', 'Microscopy'])
 
+class IndexItem(BaseModel):
+    image_path: str
+    labels: Optional[List[str]] = None
+
+class BatchIndexRequest(BaseModel):
+    user_id: str
+    items: List[IndexItem]
+
 class SearchRequest(BaseModel):
     user_id: str
     image_path: Optional[str] = None # Path to query image
@@ -25,3 +33,7 @@ class SearchResponse(BaseModel):
 class DeleteRequest(BaseModel):
     user_id: str
     image_path: str
+
+class BatchDeleteRequest(BaseModel):
+    user_id: str
+    image_paths: List[str]

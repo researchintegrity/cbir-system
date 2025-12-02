@@ -13,7 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import settings
 from models.sscd_model import SSCDEncoder
 from database.milvus_manager import MilvusManager
-from schemas import IndexRequest, SearchRequest, SearchResponse, DeleteRequest
+from schemas import IndexRequest, SearchRequest, SearchResponse, DeleteRequest, BatchIndexRequest, BatchDeleteRequest
 
 app = FastAPI(title="CBIR Microservice", version="1.0.0")
 
@@ -85,6 +85,64 @@ async def index_image(request: IndexRequest):
         return {"status": "success", "id": ids[0]}
     except Exception as e:
         print(f"Error indexing image: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/index/batch")
+async def index_images_batch(request: BatchIndexRequest):
+    """
+    Index multiple images in batch.
+    """
+    if not encoder or not milvus_manager:
+        raise HTTPException(status_code=503, detail="Service not fully initialized")
+
+    # Validate paths and load images
+    valid_items = []
+    images = []
+    paths = []
+    labels_list = []
+    
+    for item in request.items:
+        if os.path.exists(item.image_path):
+            try:
+                img = Image.open(item.image_path).convert("RGB")
+                images.append(img)
+                paths.append(item.image_path)
+                labels_list.append(item.labels or [])
+                valid_items.append(item)
+            except Exception as e:
+                print(f"Error loading image {item.image_path}: {e}")
+                # Skip failed loads
+        else:
+            print(f"Image not found: {item.image_path}")
+
+    if not images:
+        raise HTTPException(status_code=400, detail="No valid images found to index")
+
+    try:
+        # Encode in batch
+        # encoder.encode handles batching internally
+        embeddings = encoder.encode(images) # Returns (N, dim) array
+        embeddings_list = embeddings.tolist()
+        
+        # Insert into Milvus
+        ids = milvus_manager.insert_vectors(
+            user_id=request.user_id,
+            image_paths=paths,
+            embeddings=embeddings_list,
+            labels=labels_list
+        )
+        
+        # Ensure ids is a proper Python list for JSON serialization
+        ids = [int(id_val) for id_val in ids]
+        
+        return {
+            "status": "success", 
+            "indexed_count": len(ids), 
+            "ids": ids,
+            "failed_count": len(request.items) - len(ids)
+        }
+    except Exception as e:
+        print(f"Error batch indexing: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/search")
@@ -165,6 +223,21 @@ async def delete_image(request: DeleteRequest):
         milvus_manager.delete_by_path(user_id=request.user_id, image_path=request.image_path)
         return {"status": "success"}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/delete/batch")
+async def delete_images_batch(request: BatchDeleteRequest):
+    """
+    Delete multiple images from the index.
+    """
+    if not milvus_manager:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+
+    try:
+        milvus_manager.delete_batch_by_paths(user_id=request.user_id, image_paths=request.image_paths)
+        return {"status": "success", "deleted_count": len(request.image_paths)}
+    except Exception as e:
+        print(f"Error batch deleting: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -81,9 +81,9 @@ services:
       - ./src:/app/src
       - ./config:/app/config
       - ./models:/app/models
-      - ./rank_images:/app/rank_images
+      # - ./rank_images:/app/rank_images
       # Mount the shared workspace from the host if needed for file access
-      # - ../../workspace:/workspace
+      - ../../cbir-workspace:/workspace
     environment:
       - MILVUS_HOST=milvus-standalone
       - MODEL_DEVICE=cpu # Change to cuda if GPU available

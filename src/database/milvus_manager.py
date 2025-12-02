@@ -167,6 +167,19 @@ class MilvusManager:
         self.collection.delete(expr)
         self.collection.flush()
 
+    def delete_batch_by_paths(self, user_id: str, image_paths: List[str]):
+        """Delete multiple vectors by image paths and user_id."""
+        if not image_paths:
+            return
+            
+        # Construct expression: user_id == 'X' && image_path in ['A', 'B', 'C']
+        # Note: Milvus 'in' operator syntax
+        paths_str = ", ".join([f"'{p}'" for p in image_paths])
+        expr = f"user_id == '{user_id}' && image_path in [{paths_str}]"
+        
+        self.collection.delete(expr)
+        self.collection.flush()
+
     def delete_by_user(self, user_id: str):
         """Delete all vectors for a specific user."""
         expr = f"user_id == '{user_id}'"
