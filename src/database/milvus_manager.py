@@ -70,7 +70,7 @@ class MilvusManager:
 
     def insert_vectors(self, user_id: str, image_paths: List[str], embeddings: List[List[float]], labels: Optional[List[List[str]]] = None) -> List[int]:
         """
-        Insert vectors into the collection.
+        Insert vectors into the collection, skipping duplicates.
         
         Args:
             user_id: The owner of the images.
@@ -81,24 +81,43 @@ class MilvusManager:
         Returns:
             List of inserted IDs.
         """
-        # Prepare data for insertion
+        # Check for existing paths to avoid duplicates
+        existing = self.check_image_paths_exist(user_id, image_paths)
+        
+        # Filter out already-indexed paths
+        new_indices = [i for i, path in enumerate(image_paths) if not existing.get(path, False)]
+        
+        if not new_indices:
+            print(f"All {len(image_paths)} images already indexed for user {user_id}, skipping")
+            return []
+        
+        if len(new_indices) < len(image_paths):
+            print(f"Skipping {len(image_paths) - len(new_indices)} already-indexed images")
+        
+        # Prepare data for insertion (only new images)
         # Milvus expects columns: [user_id_list, image_path_list, labels_list, embedding_list]
         # Note: id is auto-generated
         
-        user_ids = [user_id] * len(image_paths)
+        new_paths = [image_paths[i] for i in new_indices]
+        new_embeddings = [embeddings[i] for i in new_indices]
+        
+        user_ids = [user_id] * len(new_paths)
         # If labels not provided, use empty list for each image
         if labels is None:
-            labels = [[] for _ in range(len(image_paths))]
+            new_labels = [[] for _ in range(len(new_paths))]
+        else:
+            new_labels = [labels[i] for i in new_indices]
         
         data = [
             user_ids,
-            image_paths,
-            labels,
-            embeddings
+            new_paths,
+            new_labels,
+            new_embeddings
         ]
         
         res = self.collection.insert(data)
         self.collection.flush() # Ensure data is visible
+        print(f"Inserted {len(new_paths)} new images for user {user_id}")
         return res.primary_keys
 
     def search_vectors(self, query_embedding: List[float], top_k: int = 10, user_id: Optional[str] = None, labels: Optional[List[str]] = None) -> List[Dict[str, Any]]:
@@ -186,3 +205,47 @@ class MilvusManager:
         self.collection.delete(expr)
         self.collection.flush()
         print(f"Deleted all data for user: {user_id}")
+
+    def check_image_paths_exist(self, user_id: str, image_paths: List[str]) -> Dict[str, bool]:
+        """
+        Check which image paths are already indexed in the collection.
+        
+        Args:
+            user_id: The user ID to filter by.
+            image_paths: List of image paths to check.
+            
+        Returns:
+            Dictionary mapping image_path -> exists (bool)
+        """
+        if not image_paths:
+            return {}
+        
+        # Query in batches to avoid expression length limits
+        batch_size = 100
+        results = {path: False for path in image_paths}
+        
+        for i in range(0, len(image_paths), batch_size):
+            batch_paths = image_paths[i:i + batch_size]
+            
+            # Construct expression: user_id == 'X' && image_path in ['A', 'B', 'C']
+            paths_str = ", ".join([f"'{p}'" for p in batch_paths])
+            expr = f"user_id == '{user_id}' && image_path in [{paths_str}]"
+            
+            try:
+                # Query to find existing paths
+                query_results = self.collection.query(
+                    expr=expr,
+                    output_fields=["image_path"]
+                )
+                
+                # Mark found paths as existing
+                for item in query_results:
+                    path = item.get("image_path")
+                    if path in results:
+                        results[path] = True
+                        
+            except Exception as e:
+                print(f"Error checking image paths: {e}")
+                # On error, assume paths don't exist (safer - will re-index)
+        
+        return results

@@ -13,7 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import settings
 from models.sscd_model import SSCDEncoder
 from database.milvus_manager import MilvusManager
-from schemas import IndexRequest, SearchRequest, SearchResponse, DeleteRequest, BatchIndexRequest, BatchDeleteRequest
+from schemas import IndexRequest, SearchRequest, SearchResponse, DeleteRequest, BatchIndexRequest, BatchDeleteRequest, CheckVisibilityRequest, CheckVisibilityResponse
 
 app = FastAPI(title="CBIR Microservice", version="1.0.0")
 
@@ -54,6 +54,42 @@ async def startup_event():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "model": encoder is not None, "database": milvus_manager is not None}
+
+
+@app.post("/check_visibility", response_model=CheckVisibilityResponse)
+async def check_visibility(request: CheckVisibilityRequest):
+    """
+    Check which images are already indexed in the CBIR system.
+    
+    This endpoint allows clients to determine which images need to be indexed
+    before performing a search, avoiding duplicate indexing.
+    
+    Args:
+        request: Contains user_id and list of image_paths to check
+        
+    Returns:
+        Dictionary mapping each image_path to a boolean indicating if it's indexed
+    """
+    if not milvus_manager:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        visibility = milvus_manager.check_image_paths_exist(
+            user_id=request.user_id,
+            image_paths=request.image_paths
+        )
+        
+        indexed_count = sum(1 for v in visibility.values() if v)
+        
+        return CheckVisibilityResponse(
+            visibility=visibility,
+            total_checked=len(request.image_paths),
+            indexed_count=indexed_count
+        )
+    except Exception as e:
+        print(f"Error checking visibility: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/index")
 async def index_image(request: IndexRequest):
@@ -223,6 +259,21 @@ async def delete_image(request: DeleteRequest):
         milvus_manager.delete_by_path(user_id=request.user_id, image_path=request.image_path)
         return {"status": "success"}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/delete/user")
+async def delete_user_data(request: DeleteRequest):
+    """
+    Delete all images for a specific user.
+    """
+    if not milvus_manager:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+
+    try:
+        milvus_manager.delete_by_user(user_id=request.user_id)
+        return {"status": "success", "message": f"Deleted all data for user {request.user_id}"}
+    except Exception as e:
+        print(f"Error deleting user data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/delete/batch")

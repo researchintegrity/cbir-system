@@ -37,3 +37,16 @@ class DeleteRequest(BaseModel):
 class BatchDeleteRequest(BaseModel):
     user_id: str
     image_paths: List[str]
+
+
+class CheckVisibilityRequest(BaseModel):
+    """Request to check which images are indexed in the CBIR system."""
+    user_id: str
+    image_paths: List[str]  # List of image paths to check
+
+
+class CheckVisibilityResponse(BaseModel):
+    """Response indicating which images are indexed."""
+    visibility: dict  # Maps image_path -> bool (True if indexed)
+    total_checked: int
+    indexed_count: int
