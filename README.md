@@ -2,7 +2,7 @@
 
 A standalone microservice for image similarity search and deduplication, powered by **Milvus** (Vector Database) and **SSCD** (Self-Supervised Copy Detection).
 
-##  Quick Start
+## Quick Start
 
 ### 1. Prerequisites
 
@@ -19,21 +19,69 @@ A standalone microservice for image similarity search and deduplication, powered
    wget -O models/sscd_disc_mixup.torchscript.pt https://dl.fbaipublicfiles.com/sscd-copy-detection/sscd_disc_mixup.torchscript.pt
    ```
 
-2. **Start the Service**:
+2. **Configure Environment**:
+   Copy the example environment file and customize it:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env to set your paths
+   ```
+
+   Key environment variables:
+   
+   | Variable | Default | Description |
+   |----------|---------|-------------|
+   | `WORKSPACE_PATH` | `../../cbir-workspace` | Path to shared image workspace |
+   | `DOCKER_VOLUME_DIRECTORY` | `.` | Base path for persistent data |
+   | `MODEL_DEVICE` | `cpu` | Device for inference (`cpu` or `cuda`) |
+   | `CBIR_PORT` | `8001` | CBIR service port |
+
+3. **Start the Service**:
 
    ```bash
    docker-compose up -d
    ```
 
    This starts:
-   - **Milvus Standalone** (Vector DB) on port `19530`
-   - **CBIR API** on port `8001`
+   - **etcd** - Distributed KV store for Milvus
+   - **MinIO** - Object storage for Milvus (port `9000`, console `9001`)
+   - **Milvus Standalone** - Vector database (port `19530`)
+   - **CBIR API** - Image search service (port `8001`)
+   - **Attu** - Milvus admin UI (port `3322`)
 
-3. **Verify**:
+4. **Verify**:
+
+   ```bash
+   # Check all services are running
+   docker-compose ps
+   
+   # Check CBIR health
+   curl http://localhost:8001/health
+   ```
+
    Visit `http://localhost:8001/docs` to see the API documentation.
 
-4. **Visualization**:
+5. **Visualization**:
    Access the **Attu** interface at `http://localhost:3322` to visualize and manage the Milvus database.
+
+### 3. Common Commands
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Stop all services
+docker-compose down
+
+# View logs
+docker-compose logs -f cbir-service
+
+# Restart CBIR service after code changes
+docker restart cbir-service
+
+# Remove all data and start fresh
+docker-compose down -v
+```
 
 ---
 
