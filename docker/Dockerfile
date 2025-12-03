@@ -24,7 +24,7 @@ COPY config/ ./config/
 RUN mkdir -p models
 
 # Expose API port
-EXPOSE 8001
+EXPOSE ${CBIR_SERVICE_PORT:-8001}
 
 # Run the application
 CMD ["python", "src/main.py"]

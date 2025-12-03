@@ -51,6 +51,8 @@ def load_config(config_path: str = "config/config.yaml") -> Config:
         config_dict["milvus"]["host"] = os.getenv("MILVUS_HOST")
     if os.getenv("MODEL_DEVICE"):
         config_dict["model"]["device"] = os.getenv("MODEL_DEVICE")
+    if os.getenv("CBIR_SERVICE_PORT"):
+        config_dict["app"]["port"] = int(os.getenv("CBIR_SERVICE_PORT"))
 
     return Config(**config_dict)
 
