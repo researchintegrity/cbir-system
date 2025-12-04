@@ -25,13 +25,22 @@ class MilvusManager:
         self.init_collection()
 
     def connect(self):
-        print(f"Connecting to Milvus at {self.host}:{self.port}...")
-        try:
-            connections.connect("default", host=self.host, port=self.port)
-            print("Connected to Milvus.")
-        except Exception as e:
-            print(f"Failed to connect to Milvus: {e}")
-            raise e
+        import time
+        max_retries = 5
+        for attempt in range(max_retries):
+            print(f"Connecting to Milvus at {self.host}:{self.port}... (attempt {attempt + 1}/{max_retries})")
+            try:
+                connections.connect("default", host=self.host, port=self.port)
+                print("Connected to Milvus.")
+                return
+            except Exception as e:
+                print(f"Failed to connect to Milvus: {e}")
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff: 1, 2, 4, 8 seconds
+                    print(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    raise e
 
     def init_collection(self):
         """Initialize the collection schema if it doesn't exist."""
