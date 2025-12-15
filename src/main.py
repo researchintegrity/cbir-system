@@ -13,7 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import settings
 from models.sscd_model import SSCDEncoder
 from database.milvus_manager import MilvusManager
-from schemas import IndexRequest, SearchRequest, SearchResponse, DeleteRequest, BatchIndexRequest, BatchDeleteRequest, CheckVisibilityRequest, CheckVisibilityResponse
+from schemas import IndexRequest, SearchRequest, SearchResponse, DeleteRequest, BatchIndexRequest, BatchDeleteRequest, CheckVisibilityRequest, CheckVisibilityResponse, UpdateLabelsRequest
 
 app = FastAPI(title="CBIR Microservice", version="1.0.0")
 
@@ -289,6 +289,35 @@ async def delete_images_batch(request: BatchDeleteRequest):
         return {"status": "success", "deleted_count": len(request.image_paths)}
     except Exception as e:
         print(f"Error batch deleting: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/update/labels")
+async def update_image_labels(request: UpdateLabelsRequest):
+    """
+    Update labels for an indexed image.
+    
+    This allows updating the classification/type labels for an image
+    without re-encoding the image embedding.
+    """
+    if not milvus_manager:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+
+    try:
+        success = milvus_manager.update_labels(
+            user_id=request.user_id,
+            image_path=request.image_path,
+            labels=request.labels
+        )
+        
+        if success:
+            return {"status": "success", "message": f"Labels updated for {request.image_path}"}
+        else:
+            raise HTTPException(status_code=404, detail=f"Image not found in index: {request.image_path}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error updating labels: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

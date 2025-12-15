@@ -50,3 +50,10 @@ class CheckVisibilityResponse(BaseModel):
     visibility: dict  # Maps image_path -> bool (True if indexed)
     total_checked: int
     indexed_count: int
+
+
+class UpdateLabelsRequest(BaseModel):
+    """Request to update labels for an indexed image."""
+    user_id: str
+    image_path: str
+    labels: List[str]  # New labels to replace existing ones

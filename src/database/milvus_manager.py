@@ -258,3 +258,61 @@ class MilvusManager:
                 # On error, assume paths don't exist (safer - will re-index)
         
         return results
+
+    def update_labels(self, user_id: str, image_path: str, labels: List[str]) -> bool:
+        """
+        Update labels for an existing image in the collection.
+        
+        Milvus doesn't support direct updates, so we need to:
+        1. Query to get the existing record (to preserve the embedding)
+        2. Delete the old record
+        3. Insert a new record with updated labels
+        
+        Args:
+            user_id: The user ID
+            image_path: The image path to update
+            labels: New labels to set
+            
+        Returns:
+            True if successful, False if image not found
+        """
+        # Query to get existing record
+        expr = f"user_id == '{user_id}' && image_path == '{image_path}'"
+        
+        try:
+            query_results = self.collection.query(
+                expr=expr,
+                output_fields=["embedding"]
+            )
+            
+            if not query_results:
+                print(f"Image not found for label update: {image_path}")
+                return False
+            
+            # Get the embedding from the existing record
+            embedding = query_results[0].get("embedding")
+            
+            if embedding is None:
+                print(f"No embedding found for image: {image_path}")
+                return False
+            
+            # Delete the old record
+            self.collection.delete(expr)
+            
+            # Insert new record with updated labels
+            data = [
+                [user_id],
+                [image_path],
+                [labels],
+                [embedding]
+            ]
+            
+            self.collection.insert(data)
+            self.collection.flush()
+            
+            print(f"Updated labels for image: {image_path} -> {labels}")
+            return True
+            
+        except Exception as e:
+            print(f"Error updating labels: {e}")
+            return False
