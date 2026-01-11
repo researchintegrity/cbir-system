@@ -21,6 +21,23 @@ class SSCDEncoder(ImageEncoder):
         self.transform = self._build_transform()
         self.load_model()
 
+    def _build_transform(self):
+        """
+        Build the preprocessing transform for SSCD.
+        Standard SSCD usually expects:
+        - Resize to input_size (e.g. 224 or 288)
+        - Normalize with ImageNet mean/std
+        """
+        input_size = settings.model.input_size
+        return transforms.Compose([
+            transforms.Resize((input_size, input_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406], 
+                std=[0.229, 0.224, 0.225]
+            ),
+        ])
+
     def _download_model(self, model_path: str, download_url: str) -> bool:
         """
         Download the model from the configured URL.
