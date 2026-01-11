@@ -33,23 +33,41 @@ milvus_manager = None
 @app.on_event("startup")
 async def startup_event():
     global encoder, milvus_manager
+    print("=" * 80)
     print("Starting CBIR Service...")
+    print("=" * 80)
     
     # Initialize Model
     try:
+        print("\n[1/2] Initializing SSCD Model...")
         encoder = SSCDEncoder()
-        print("Model initialized.")
+        print("✓ Model initialized successfully.\n")
     except Exception as e:
-        print(f"Error initializing model: {e}")
-        # Don't crash, maybe model file is missing and will be mounted later?
-        # But for now, let's print error.
+        print(f"✗ Error initializing model: {e}\n")
+        # Don't crash the service, but log the error prominently
+        encoder = None
 
     # Initialize Database
     try:
+        print("[2/2] Initializing Milvus Database...")
         milvus_manager = MilvusManager()
-        print("Database initialized.")
+        print("✓ Database initialized successfully.\n")
     except Exception as e:
-        print(f"Error initializing database: {e}")
+        print(f"✗ Error initializing database: {e}\n")
+        milvus_manager = None
+    
+    if encoder and milvus_manager:
+        print("=" * 80)
+        print("✓ CBIR Service is fully operational")
+        print("=" * 80)
+    else:
+        print("=" * 80)
+        print("✗ WARNING: CBIR Service is partially initialized")
+        if not encoder:
+            print("  - Model not available")
+        if not milvus_manager:
+            print("  - Database not available")
+        print("=" * 80)
 
 @app.get("/health")
 def health_check():
